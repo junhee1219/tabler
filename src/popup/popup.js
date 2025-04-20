@@ -1,6 +1,13 @@
 // src/popup/popup.js
-document.getElementById('export').addEventListener('click', () => {
-  chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-    chrome.tabs.sendMessage(tabs[0].id, { type: 'EXPORT_TABLES' });
+document.getElementById('start-select').addEventListener('click', async () => {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    files: [
+      'src/utils/tableExtractor.js',
+      'src/content.js'
+    ]
   });
+  chrome.tabs.sendMessage(tab.id, { type: 'START_TABLE_SELECTION' });
+  window.close();
 });

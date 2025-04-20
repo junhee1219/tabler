@@ -1,8 +1,46 @@
-import { extractTables } from '../utils/tableExtractor';
+// src/content.js
 
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.type === 'EXPORT_TABLES') {
-    const tables = extractTables();
-    chrome.runtime.sendMessage({ type: 'TABLES_DATA', payload: tables });
+// 팝업에서 START_TABLE_SELECTION 메시지를 받으면 선택 모드로 진입
+chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === 'START_TABLE_SELECTION') {
+      startTableSelection();
+    }
+  });
+  
+  function startTableSelection() {
+    const H = '___tbl_sel___';
+    const style = document.createElement('style');
+    style.textContent = `.${H}{outline:2px solid orange;cursor:pointer;}`;
+    document.head.append(style);
+  
+    function cleanup() {
+      document.removeEventListener('mouseover', onOver, true);
+      document.removeEventListener('mouseout',  onOut,  true);
+      document.removeEventListener('click',     onClick, true);
+      style.remove();
+    }
+  
+    function onOver(e) {
+      const tbl = e.target.closest('table');
+      if (tbl) tbl.classList.add(H);
+    }
+    function onOut(e) {
+      const tbl = e.target.closest('table');
+      if (tbl) tbl.classList.remove(H);
+    }
+  
+    function onClick(e) {
+      const tbl = e.target.closest('table');
+      if (!tbl) return;
+      e.preventDefault(); e.stopPropagation();
+      cleanup();
+  
+      // 당신의 exportTableToExcel 호출
+      window.tableExtractor.exportTableToExcel(tbl, {});
+    }
+  
+    document.addEventListener('mouseover', onOver, true);
+    document.addEventListener('mouseout',  onOut,  true);
+    document.addEventListener('click',     onClick, true);
   }
-});
+  
