@@ -4,6 +4,9 @@
   "version": "1.0.0",
   "permissions": ["activeTab","scripting","downloads"],
   "host_permissions": ["*://*/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "src/popup/popup.html"
   },
@@ -11,9 +14,8 @@
     {
       "matches": ["*://*/*"],
       "js": [
-        "libs/exceljs.browser.js",
-        "libs/FileSaver.min.js"
-      ],
+      "src/content.js"
+    ],
       "run_at": "document_idle"
     }
   ]
