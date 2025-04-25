@@ -19,10 +19,23 @@ function startTableSelection() {
     style.remove();
   }
 
+  function getRealBackgroundColor(el) {
+    let bg = window.getComputedStyle(el).backgroundColor;
+    // 'transparent' 또는 투명 rgba(0,0,0,0)이면 부모로 올라가 봄
+    if (bg === 'transparent' || bg === 'rgba(0, 0, 0, 0)') {
+      if (el.parentElement) {
+        return getRealBackgroundColor(el.parentElement);
+      }
+      return null;
+    }
+    return bg;
+  }
+
   function onOver(e) {
     const tbl = e.target.closest("table");
     if (tbl) tbl.classList.add(H);
   }
+
   function onOut(e) {
     const tbl = e.target.closest("table");
     if (tbl) tbl.classList.remove(H);
@@ -35,9 +48,28 @@ function startTableSelection() {
     e.stopPropagation();
     cleanup();
 
+    const originals = Array.from(tbl.querySelectorAll('th, td')).map(cell => {
+      const cs = window.getComputedStyle(cell);
+      return {
+        bg:    getRealBackgroundColor(cell),
+        color: cs.color,
+        align: cs.textAlign
+      };
+    });
+
+    const clone = tbl.cloneNode(true);
+    clone.querySelectorAll('th, td').forEach((cell, i) => {
+      const { bg, color, align } = originals[i];
+      const parts = [];
+      if (bg)    parts.push(`background-color:${bg}`);
+      if (color) parts.push(`color:${color}`);
+      if (align) parts.push(`text-align:${align}`);
+      cell.style.cssText = parts.join(';');
+    });
+
     chrome.runtime.sendMessage({
       action: "TABLE_SELECTED",
-      tableHtml: tbl.outerHTML,
+      tableHtml: clone.outerHTML,
     });
   }
 

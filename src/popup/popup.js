@@ -3,83 +3,31 @@
 const CmmnExcel = {
   // CSS 색상(rgb 또는 hex)을 ExcelJS ARGB 형식('FF' + RRGGBB)으로 변환
   getARGBFromColor: function (color) {
-    if (!color || color === "rgba(0, 0, 0, 0)" || color === "transparent")
-      return null;
-    let rgb = color.match(/rgb\s*\(\s*(\d+),\s*(\d+),\s*(\d+)\s*\)/i);
-    if (rgb) {
-      let r = parseInt(rgb[1]).toString(16).padStart(2, "0");
-      let g = parseInt(rgb[2]).toString(16).padStart(2, "0");
-      let b = parseInt(rgb[3]).toString(16).padStart(2, "0");
-      return "FF" + r + g + b;
+    if (!color || color === 'transparent' || color === 'rgba(0, 0, 0, 0)') return null;
+    const m = color.match(
+      /rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/
+    );
+    if (m) {
+      const [_, r, g, b] = m;
+      return 'FF' +
+        parseInt(r).toString(16).padStart(2,'0') +
+        parseInt(g).toString(16).padStart(2,'0') +
+        parseInt(b).toString(16).padStart(2,'0');
     }
-    if (color[0] === "#") {
-      let hex = color.replace("#", "");
-      if (hex.length === 3)
-        hex = hex
-          .split("")
-          .map((c) => c + c)
-          .join("");
-      return "FF" + hex;
+    if (color.startsWith('#')) {
+      let hex = color.slice(1);
+      if (hex.length === 3) hex = hex.split('').map(c=>c+c).join('');
+      return 'FF' + hex;
     }
     return null;
   },
 
-  // 테이블의 최대 열 수 계산 (colspan 고려)
-  getMaxColumnCount: function (table) {
-    let max = 0;
-    for (let i = 0; i < table.rows.length; i++) {
-      let row = table.rows[i];
-      let count = 0;
-      for (let j = 0; j < row.cells.length; j++) {
-        count += row.cells[j].colSpan || 1;
-      }
-      if (count > max) max = count;
-    }
-    return max;
-  },
 
-  exportTableToExcel: async function (table, header = {}) {
-    console.log(table);
-
+  exportTableToExcel: async function (table) {
     let workbook = new ExcelJS.Workbook();
     let worksheet = workbook.addWorksheet("Sheet1");
 
-    // 테이블의 최대 열 수 계산 (병합을 위해)
-    let numColumns = this.getMaxColumnCount(table);
     let headerRowsCount = 0;
-
-    // header.title이 있으면 첫 행에 추가 (가로 병합)
-    if (header.title) {
-      let titleRow = worksheet.addRow([header.title]);
-      worksheet.mergeCells(titleRow.number, 1, titleRow.number, numColumns);
-      titleRow.height = 30; // 위아래 여백 증가
-      let titleCell = titleRow.getCell(1);
-      titleCell.alignment = { horizontal: "center", vertical: "middle" };
-      titleCell.font = { bold: true, size: 14 }; // 폰트 크기 14, 볼드체 적용
-      headerRowsCount++;
-    }
-
-    // header.store가 있으면 매장명 행 추가 (A열)
-    if (header.store) {
-      let storeRow = worksheet.addRow([`매장명 : ${header.store}`]);
-      storeRow.height = 22;
-      storeRow.getCell(1).alignment = { vertical: "middle" };
-      headerRowsCount++;
-    }
-    // header.department 있으면 매장명 행 추가 (A열)
-    if (header.department) {
-      let departRow = worksheet.addRow([`Department : ${header.department}`]);
-      departRow.height = 22;
-      departRow.getCell(1).alignment = { vertical: "middle" };
-      headerRowsCount++;
-    }
-    // header.date가 있으면 날짜 행 추가 (A열)
-    if (header.date) {
-      let dateRow = worksheet.addRow([`Date : ${header.date}`]);
-      dateRow.height = 22;
-      dateRow.getCell(1).alignment = { vertical: "middle" };
-      headerRowsCount++;
-    }
 
     // 병합 셀 처리를 위한 occupancy 객체
     let occupancy = {};
@@ -106,7 +54,7 @@ const CmmnExcel = {
         }
         let cell = htmlRow.cells[j];
         let excelCell = worksheet.getCell(excelRowIndex, colIndex);
-        excelCell.value = cell.innerText;
+        excelCell.value = cell.innerText.trim();
         if (cell.innerText.indexOf("\n") !== -1) {
           hasNewLine = true;
         }
@@ -119,11 +67,7 @@ const CmmnExcel = {
           right: { style: "thin" },
         };
 
-        // getComputedStyle로 실제 CSS 스타일 읽어오기
-        let computedStyle = window.getComputedStyle(cell);
-
-        // 배경색 적용
-        let bg = computedStyle.getPropertyValue("background-color");
+        let bg = cell.style.backgroundColor;         // 콘텐츠 스크립트에서 inlined
         let argbBg = this.getARGBFromColor(bg);
         if (argbBg) {
           excelCell.fill = {
@@ -134,7 +78,7 @@ const CmmnExcel = {
         }
 
         // 글자색 적용
-        let color = computedStyle.getPropertyValue("color");
+        let color = cell.style.color;
         let argbFont = this.getARGBFromColor(color);
         if (argbFont) {
           excelCell.font = {
@@ -142,7 +86,7 @@ const CmmnExcel = {
           };
         }
 
-        let textAlign = computedStyle.getPropertyValue("text-align").trim();
+        let textAlign = cell.style.textAlign || 'left';
         if (!["left", "center", "right"].includes(textAlign)) {
           textAlign = "left"; // 기본값 지정
         }
@@ -178,7 +122,7 @@ const CmmnExcel = {
       let maxLength = 10;
       column.eachCell({ includeEmpty: true }, (cell) => {
         if (cell.row <= headerRowsCount) return; // 헤더 행은 건너뜁니다.
-        let cellValue = cell.value ? cell.value.toString() : "";
+        let cellValue = cell.value ? cell.value.toString().trim() : "";
         maxLength = Math.max(maxLength, cellValue.length);
       });
       column.width = maxLength + 2;
@@ -217,6 +161,9 @@ document.addEventListener("DOMContentLoaded", () => {
         );
         return;
       }
+
+      const bg = tableEl.querySelector('th')?.style.backgroundColor;
+      console.log('첫번째 <th> 인라인 bg:', bg);
 
       // 3) DOM 요소를 넘겨줌
       CmmnExcel.exportTableToExcel(tableEl);
