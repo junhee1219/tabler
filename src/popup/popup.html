@@ -1,16 +1,127 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
   <script src="../../libs/exceljs.bare.min.js"></script>
   <script src="../../libs/FileSaver.min.js"></script>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://fonts.googleapis.com/css?family=Roboto:400,500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <style>
-    body { font-family: sans-serif; padding: 10px; width: 180px; }
-    button { width: 100%; padding: 8px; margin-top: 10px; }
+    /* Reset & Base */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: #f4f6f8;
+      color: #333;
+      padding: 16px;
+      width: 360px;
+    }
+    h3 {
+      font-size: 14px;
+      font-weight: 500;
+      margin: 12px 0 8px;
+      color: #555;
+    }
+    button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 10px 0;
+      margin: 8px 0;
+      border: none;
+      border-radius: 6px;
+      background-color: #1976d2;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    button:hover {
+      background-color: #1565c0;
+    }
+    button:disabled {
+      background-color: #90a4ae;
+      cursor: default;
+    }
+    .material-icons {
+      font-size: 20px;
+      margin-right: 6px;
+    }
+    /* Recent list */
+    #recent-list {
+      list-style: none;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-bottom: 12px;
+    }
+    #recent-list li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 8px;
+      background: #fff;
+      border-radius: 4px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      margin-bottom: 6px;
+    }
+    .export-info {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      margin-right: 8px;
+    }
+    .export-info .timestamp {
+      font-size: 10px;
+      color: #888;
+      margin-bottom: 2px;
+    }
+    .export-info .filename {
+      font-size: 12px;
+      color: #333;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .export-actions {
+      display: flex;
+      gap: 4px;
+    }
+    .export-actions button {
+      background: transparent;
+      padding: 4px;
+      border-radius: 4px;
+      border: none;
+    }
+    .export-actions button .material-icons {
+      font-size: 16px;
+      color: #555;
+    }
+    .export-actions button:hover .material-icons {
+      color: #000;
+    }
+    /* Scrollbar styling */
+    #recent-list::-webkit-scrollbar {
+      width: 6px;
+    }
+    #recent-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    #recent-list::-webkit-scrollbar-thumb {
+      background-color: rgba(0,0,0,0.2);
+      border-radius: 3px;
+    }
   </style>
 </head>
 <body>
-  <button id="start-select">테이블 선택하여 내보내기</button>
+  <button id="start-select">
+    <span class="material-icons"></span>테이블 선택</button>
+  <h3>최근 내보내기</h3>
+  <ul id="recent-list">
+    <!-- JS로 항목 추가 -->
+  </ul>
   <script src="popup.js"></script>
 </body>
 </html>

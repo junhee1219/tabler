@@ -1,5 +1,8 @@
 // src/popup/popup.js
 
+const RECENT_KEY = "recentExports";
+
+
 const CmmnExcel = {
   // CSS 색상(rgb 또는 hex)을 ExcelJS ARGB 형식('FF' + RRGGBB)으로 변환
   getARGBFromColor: function (color) {
@@ -23,7 +26,7 @@ const CmmnExcel = {
   },
 
 
-  exportTableToExcel: async function (table) {
+  exportTableToExcel: async function (table, filename = `export_${Date.now()}.xlsx`) {
     let workbook = new ExcelJS.Workbook();
     let worksheet = workbook.addWorksheet("Sheet1");
 
@@ -129,45 +132,84 @@ const CmmnExcel = {
     });
 
     const buffer = await workbook.xlsx.writeBuffer();
-    saveAs(new Blob([buffer]), "sheet.xlsx");
+    saveAs(new Blob([buffer]), filename);
+    await saveRecentExport(filename, table.outerHTML);
   },
 };
 
-// popup.js
-document.addEventListener("DOMContentLoaded", () => {
-  const btn = document.getElementById("start-select");
-  btn.addEventListener("click", async () => {
-    // 1. 현재 활성 탭 가져오기
-    const [tab] = await chrome.tabs.query({
-      active: true,
-      currentWindow: true,
-    });
-    if (!tab.id) return;
-    // 2. content script에 메시지 보내서 테이블 선택 시작
-    chrome.tabs.sendMessage(tab.id, { action: "START_TABLE_SELECTION" });
-  });
+async function saveRecentExport(filename, tableHtml) {
+  const { [RECENT_KEY]: recentExports = [] } = await chrome.storage.local.get(RECENT_KEY);
+  recentExports.unshift({ filename, tableHtml, timestamp: new Date().toISOString() });
+  if (recentExports.length > 5) recentExports.pop();
+  await chrome.storage.local.set({ [RECENT_KEY]: recentExports });
+}
 
-  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+function renderRecent(list) {
+  const listEl = document.getElementById("recent-list");
+  listEl.innerHTML = "";
+  list.forEach((rec, idx) => {
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <div class="export-info">
+        <small class="timestamp">${new Date(rec.timestamp).toLocaleString()}</small>
+        <span class="filename">${rec.filename}</span>
+      </div>
+      <div class="export-actions">
+        <button class="reexport" data-idx="${idx}" title="재내보내기">
+          <span class="material-icons">download</span>
+        </button>
+        <button class="delete" data-idx="${idx}" title="삭제">
+          <span class="material-icons">delete</span>
+        </button>
+      </div>
+    `;
+    listEl.appendChild(li);
+  });
+}
+document.addEventListener("DOMContentLoaded", async () => {
+  // 테이블 선택 버튼
+  document.getElementById("start-select")
+    .addEventListener("click", async () => {
+      alert(1)
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ["src/content.js"],
+      });
+      alert(2)
+      if (tab.id) chrome.tabs.sendMessage(tab.id, { action: "START_TABLE_SELECTION" });
+    });
+
+  // 팝업 → 백그라운드 메시지 리스너
+  chrome.runtime.onMessage.addListener((msg, sender) => {
     if (msg.action === "TABLE_SELECTED" && msg.tableHtml) {
-      // 1) wrapper DIV 를 만들어서
       const wrapper = document.createElement("div");
       wrapper.innerHTML = msg.tableHtml;
-
-      // 2) 실제 <table> 요소를 꺼내서
       const tableEl = wrapper.querySelector("table");
-      if (!tableEl) {
-        alert(
-          "TABLE_SELECTED 메시지에 tableHtml 은 있는데, <table> 요소를 찾을 수 없습니다."
-        );
-        return;
-      }
+      if (tableEl) CmmnExcel.exportTableToExcel(tableEl);
+    }
+  });
 
-      const bg = tableEl.querySelector('th')?.style.backgroundColor;
-      console.log('첫번째 <th> 인라인 bg:', bg);
+  // 최근 내보내기 초기 렌더링
+  const { [RECENT_KEY]: recentExports = [] } = await chrome.storage.local.get(RECENT_KEY);
+  renderRecent(recentExports);
 
-      // 3) DOM 요소를 넘겨줌
-      CmmnExcel.exportTableToExcel(tableEl);
+  // 재내보내기·삭제 핸들러
+  document.getElementById("recent-list").addEventListener("click", async e => {
+    const idx = +e.target.dataset.idx;
+    const { [RECENT_KEY]: recentExports = [] } = await chrome.storage.local.get(RECENT_KEY);
 
+    if (e.target.classList.contains("reexport")) {
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = recentExports[idx].tableHtml;
+      const tableEl = wrapper.querySelector("table");
+      CmmnExcel.exportTableToExcel(tableEl, recentExports[idx].filename);
+    }
+
+    if (e.target.classList.contains("delete")) {
+      recentExports.splice(idx, 1);
+      await chrome.storage.local.set({ [RECENT_KEY]: recentExports });
+      renderRecent(recentExports);
     }
   });
 });
