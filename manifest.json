@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Tabler Exporter",
   "version": "1.0.0",
-  "permissions": ["activeTab","scripting","downloads","storage"],
+  "permissions": ["activeTab","scripting","storage"],
   "host_permissions": ["*://*/*"],
   "background": {
     "service_worker": "background.js"
