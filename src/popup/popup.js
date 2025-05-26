@@ -1,8 +1,3 @@
-// src/popup/popup.js
-
-const RECENT_KEY = "recentExports";
-
-
 const CmmnExcel = {
   // CSS 색상(rgb 또는 hex)을 ExcelJS ARGB 형식('FF' + RRGGBB)으로 변환
   getARGBFromColor: function (color) {
@@ -136,6 +131,8 @@ const CmmnExcel = {
     await saveRecentExport(filename, table.outerHTML);
   },
 };
+// popup.js
+const RECENT_KEY = "recentExports";
 
 async function saveRecentExport(filename, tableHtml) {
   const { [RECENT_KEY]: recentExports = [] } = await chrome.storage.local.get(RECENT_KEY);
@@ -166,50 +163,109 @@ function renderRecent(list) {
     listEl.appendChild(li);
   });
 }
-document.addEventListener("DOMContentLoaded", async () => {
-  // 테이블 선택 버튼
-  document.getElementById("start-select")
-    .addEventListener("click", async () => {
-      alert(1)
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ["src/content.js"],
-      });
-      alert(2)
-      if (tab.id) chrome.tabs.sendMessage(tab.id, { action: "START_TABLE_SELECTION" });
-    });
 
-  // 팝업 → 백그라운드 메시지 리스너
-  chrome.runtime.onMessage.addListener((msg, sender) => {
+// 테이블 목록 렌더링 (isPopup: true면 팝업 자체 테이블)
+function renderTableList(tables, isPopup = false) {
+  const listEl = document.getElementById("table-list");
+  listEl.innerHTML = "";
+  tables.forEach(tbl => {
+    const li = document.createElement("li");
+    li.dataset.idx = tbl.index;
+    li.dataset.popup = isPopup ? "1" : "0";
+    li.innerHTML = `
+      <span class="info">#${tbl.index} — ${tbl.rows}×${tbl.cols}, ${tbl.width}×${tbl.height}px</span>
+      <span class="action">&#9654;</span>
+    `;
+    li.addEventListener("click", () => selectTable(tbl.index, isPopup));
+    listEl.appendChild(li);
+  });
+}
+
+// 팝업 내 테이블 목록 가져오기
+function fetchPopupTableList() {
+  const tables = Array.from(document.querySelectorAll("table")).map((tbl, idx) => {
+    const rect = tbl.getBoundingClientRect();
+    return {
+      index: idx,
+      rows: tbl.rows.length,
+      cols: tbl.rows[0]?.cells.length || 0,
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+    };
+  });
+  renderTableList(tables, true);
+}
+
+// 테이블 선택 처리
+async function selectTable(index, isPopup) {
+  if (isPopup) {
+    // 팝업 자체 테이블
+    const tbl = document.querySelectorAll("table")[index];
+    if (!tbl) return;
+    CmmnExcel.exportTableToExcel(tbl);
+    window.close();
+  } else {
+    // 현재 탭의 테이블
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    chrome.tabs.sendMessage(tab.id, { action: "SELECT_TABLE_BY_INDEX", index });
+    window.close();
+  }
+}
+
+// 페이지상의 테이블 목록 요청
+async function fetchTableList() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  chrome.tabs.sendMessage(tab.id, { action: "GET_TABLE_LIST" }, response => {
+    if (response && response.tables) {
+      renderTableList(response.tables, false);
+    } else {
+      // 탭에 콘텐츠 스크립트가 없거나 에러 시 팝업 내 테이블 표시
+      fetchPopupTableList();
+    }
+  });
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  // 최근 내보내기 렌더링
+  const { [RECENT_KEY]: recentExports = [] } = await chrome.storage.local.get(RECENT_KEY);
+  renderRecent(recentExports);
+
+  // 팝업 테이블 목록용 UI 요소 추가
+  const tableListContainer = document.createElement("div");
+  tableListContainer.innerHTML = `
+    <h3>페이지 테이블 목록</h3>
+    <ul id="table-list"></ul>
+  `;
+  document.querySelector(".container").prepend(tableListContainer);
+
+  // 초기 목록 로드
+  fetchTableList();
+
+  // "테이블 선택" 버튼 -> 강제 페이지 스크립트 주입 후 선택 모드
+  document.getElementById("start-select").addEventListener("click", async () => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["src/content.js"] });
+    chrome.tabs.sendMessage(tab.id, { action: "START_TABLE_SELECTION" });
+  });
+
+  // 메시지 리스너 (페이지 측에서 TABLE_SELECTED 전송)
+  chrome.runtime.onMessage.addListener(async (msg) => {
     if (msg.action === "TABLE_SELECTED" && msg.tableHtml) {
       const wrapper = document.createElement("div");
       wrapper.innerHTML = msg.tableHtml;
       const tableEl = wrapper.querySelector("table");
-      if (tableEl) CmmnExcel.exportTableToExcel(tableEl);
+      if (tableEl) await CmmnExcel.exportTableToExcel(tableEl);
     }
   });
 
-  // 최근 내보내기 초기 렌더링
-  const { [RECENT_KEY]: recentExports = [] } = await chrome.storage.local.get(RECENT_KEY);
-  renderRecent(recentExports);
-
-  // 재내보내기·삭제 핸들러
+  // 최근 내보내기 다시내보내기
   document.getElementById("recent-list").addEventListener("click", async e => {
     const idx = +e.target.dataset.idx;
-    const { [RECENT_KEY]: recentExports = [] } = await chrome.storage.local.get(RECENT_KEY);
-
-    if (e.target.classList.contains("reexport")) {
-      const wrapper = document.createElement("div");
-      wrapper.innerHTML = recentExports[idx].tableHtml;
-      const tableEl = wrapper.querySelector("table");
-      CmmnExcel.exportTableToExcel(tableEl, recentExports[idx].filename);
-    }
-
-    if (e.target.classList.contains("delete")) {
-      recentExports.splice(idx, 1);
-      await chrome.storage.local.set({ [RECENT_KEY]: recentExports });
-      renderRecent(recentExports);
+    if (!isNaN(idx)) {
+      const { [RECENT_KEY]: recentExports = [] } = await chrome.storage.local.get(RECENT_KEY);
+      const rec = recentExports[idx];
+      const wrapper = document.createElement("div"); wrapper.innerHTML = rec.tableHtml;
+      CmmnExcel.exportTableToExcel(wrapper.querySelector("table"), rec.filename);
     }
   });
 });

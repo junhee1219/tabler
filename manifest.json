@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tabler Exporter",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "permissions": ["activeTab","scripting","storage"],
   "host_permissions": ["*://*/*"],
   "background": {
@@ -25,7 +25,8 @@
   "content_scripts": [
     {
       "matches": ["*://*/*"],
-      "js": ["src/content.js"],
+      "css": ["src/content.css"],
+      "js": ["src/content.js", "src/content-helper.js"],
       "run_at": "document_idle"
     }
   ]

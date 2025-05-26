@@ -1,5 +1,21 @@
 // src/content.js
 // // 팝업에서 START_TABLE_SELECTION 메시지를 받으면 선택 모드로 진입
+// 기존 content.js 최상단에 추가
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll("table").forEach(tbl => {
+    tbl.classList.add("selectable-table");
+  });
+});
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.action === "SELECT_TABLE_BY_INDEX") {
+    const target = document.querySelectorAll("table")[msg.index];
+    if (!target) return;
+    const clone = target.cloneNode(true);
+    chrome.runtime.sendMessage({ action: "TABLE_SELECTED", tableHtml: clone.outerHTML });
+  }
+});
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === "START_TABLE_SELECTION") {
     startTableSelection();
